@@ -53,7 +53,7 @@ class PriorityQueue
   # by repeatedly swapping the new item with its parent until it is in the
   # correct position.
   def push(key, prio, now = nil)
-    raise "no free slots in cache" if @size == @arr.size
+    raise "no free slots in queue" if @size == @arr.size
 
     item = PriorityQueueItem.new
     item.key = key
@@ -159,20 +159,20 @@ class PriorityQueue
 end
 
 class Cache
-  attr_reader :cache, :capacity
+  attr_reader :data, :capacity
   attr_accessor :now
 
   def initialize(capacity, now = nil)
     @capacity = capacity
-    @cache = {}
+    @data = {}
     @lru = PriorityQueue.new(capacity)
     @exp = PriorityQueue.new(capacity)
     @now = now
   end
 
   def get(key)
-    if @cache.key?(key)
-      ci = @cache[key]
+    if @data.key?(key)
+      ci = @data[key]
       @lru.remove_at(key)
       @lru.push(key, ci.priority, @now)
       return ci.value
@@ -183,39 +183,39 @@ class Cache
 
   def set(key, value, prio, expiry)
     # Update an existing item.
-    if @cache.key?(key)
+    if @data.key?(key)
       @lru.remove_at(key)
       @lru.push(key, prio, @now)
       @exp.remove_at(key)
       @exp.push(key, expiry, @now)
-      @cache[key] = CacheItem.new(value, prio, expiry)
+      @data[key] = CacheItem.new(value, prio, expiry)
       return
     end
 
     # Remove all expired items, if necessary.
-    if @cache.size == @capacity
+    if @data.size == @capacity
       while @exp.peek && @exp.peek.priority < @now || Time.now.to_i
         rem_key = @exp.pop.key
-        @cache.delete(rem_key)
+        @data.delete(rem_key)
         @lru.remove_at(rem_key)
       end
     end
 
     # Remove the least recently used item, if necessary.
-    if @cache.size == @capacity
+    if @data.size == @capacity
       rem_key = @lru.pop.key
-      @cache.delete(rem_key)
+      @data.delete(rem_key)
       @exp.remove_at(rem_key)
     end
 
     # Add the new item to the cache.
-    @cache[key] = CacheItem.new(value, prio, expiry)
+    @data[key] = CacheItem.new(value, prio, expiry)
     @lru.push(key, prio, @now)
     @exp.push(key, expiry, @now)
   end
 
   def dump
-    @cache.each do |k, v|
+    @data.each do |k, v|
       puts "#{k} => #{v}"
     end
     puts "lru:"
@@ -255,10 +255,10 @@ Benchmark.bm do |x|
   end
 end
 
-# Cache contains key/value pairs. Each pair also has a priority and
+# Cache contains key/value entries. Each entry also has a priority and
 # an expiry. If the cache is full, we try doing some cleanup first:
 # - expired items are removed first
-# - if still not enough place, the last recently used item
+# - if still not enough place, the least recently used item
 #   with the lowest priority is removed
 #
 # c = Cache.new(5, PriorityQueue, 5000)
